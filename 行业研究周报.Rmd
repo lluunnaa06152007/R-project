@@ -1,0 +1,110 @@
+---
+title: "行业研究周报——数据处理与可视化"
+author: "李沐霖"
+date: "2026-11-06"
+output:
+  html_document:
+    self_contained: true
+    theme: cosmo
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(ggplot2)
+library(tidyverse)
+```
+
+## 1.读取数据
+
+```{r}
+prices <- read_csv("C:/Users/李沐霖/Documents/prices.csv", show_col_types = FALSE)
+fin <- read_csv("C:/Users/李沐霖/Documents/financials.csv",show_col_types=FALSE)
+
+```
+
+## 2.清洗数据&指标计算
+
+### 计算每只股票在不同窗口的涨跌幅：近1周、近13周、近52周
+
+```{r}
+perf <- prices%>%
+  mutate(data=as.Date(date))%>%
+  arrange(company,date)%>%
+  group_by(company)%>%
+  mutate(
+    ret_1w=close/lag(close,1)-1,
+    ret_13w=close/lag(close,13)-1,
+    ret_52w=close/lag(close,52)-1
+  )%>%
+  ungroup()
+
+#取每个公司的最新一周作为”本周表现“概览
+latest_week <- perf%>%
+  slice_max(date,n=1,by=company)%>%
+  select(company,ticker,sector,date,close,ret_1w,ret_13w,ret_52w)%>%
+  mutate(across(c(ret_1w,ret_13w,ret_52w),~round(.x*100,2)))
+
+```
+
+## 3.可视化
+
+### 图1：行业个股周度收盘价格走势
+
+```{r}
+plot_price_trend <- function(df=prices){
+  df%>%
+  mutate(date=as.Date(date))%>%
+    ggplot(aes(x=date,y=close,color=company))+
+    geom_line(linewidth=0.7)+
+    labs(title="行业代表公司周度收盘价走势",
+         x="日期",y="收盘价（元）",color="公司")+
+    theme_minimal()+
+    theme(legend.position = "bottom")
+}
+plot_price_trend()
+
+```
+
+### 图2：近一年涨跌幅对比
+
+```{r}
+plot_return_bar <- function(df=latest_week){
+  df%>%
+    ggplot(aes(x=reorder(company,ret_52w),y=ret_52w,fill=ret_52w>0))+
+    geom_col()+
+    coord_flip()+
+    scale_fill_manual(values=c("TRUE"="#E74C3C","FALSE"="#27AE60"))+
+    labs(title="近一年涨跌幅对比(%)",
+x="公司",y="涨跌幅(%)")+
+    theme_minimal()+
+    theme(legend.position = "none")}
+plot_return_bar()
+```
+
+### 图3：最新年度营收vs净利润
+
+```{r}
+plot_finance <- function(df = fin) {
+  last_year <- max(df$year)
+  df %>%
+    filter(year == last_year) %>%
+    pivot_longer(cols = c(revenue, net_profit),
+                 names_to = "指标", values_to = "金额") %>%
+    ggplot(aes(x = company, y = 金额, fill = 指标)) +
+    geom_col(position = "dodge") +
+    labs(title = paste0(last_year, " 年营收与净利润对比（亿元）"),
+         x = "公司", y = "金额（亿元）") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 30, hjust = 1))
+}
+plot_finance()
+
+```
+
+
