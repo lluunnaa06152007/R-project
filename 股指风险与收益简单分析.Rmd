@@ -1,0 +1,99 @@
+---
+title: "股票风险与收益的简单分析"
+author: "李沐霖"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## 1.加载包
+
+```{r}
+
+library(tidyverse)
+```
+
+## 2.导入数据
+
+```{r}
+data("EuStockMarkets")
+stock_df <- as.data.frame(EuStockMarkets)
+colnames(stock_df) <- c("DAX","SMI","CAC","FTSE")
+stock_df <- stock_df%>%mutate(time=1:nrow(.))
+head(stock_df)
+```
+
+## 3.数据重塑
+
+```{r}
+stock_long <- stock_df%>%
+  pivot_longer(
+    cols=c(DAX,SMI,CAC,FTSE),
+    names_to="index_name",
+    values_to="price"
+  )%>%
+  arrange(index_name,time)
+head(stock_long,10)
+
+```
+
+## 4.计算日收益率、20日滚动波动率
+
+```{r}
+stock_long <- stock_long%>%
+  group_by(index_name)%>%
+  mutate(price_lag=lag(price),
+         return=price/price_lag-1)
+stock_long <- stock_long%>%
+  filter(!is.na(return))%>%
+  ungroup()
+
+```
+
+## 5.分组汇总：平均收益率、波动率（标准差）
+
+```{r}
+risk_return <- stock_long%>%
+  group_by(index_name)%>%
+  summarise(
+    mean_return=mean(return),
+    vol=sd(return),
+    .groups="drop"
+  )
+risk_return
+```
+
+## 6.画图1：收益-风险散点图
+
+```{r}
+ggplot(risk_return,aes(x=vol,y=mean_return,label=index_name))+
+  geom_point(size=4,color="#4472c4")+
+  geom_text(nudge_x=0.0002)+
+  labs(
+    title="四大股指：收益率vs波动率",
+    x="波动率（风险）",
+    y="平均日收益率"
+  )+
+  theme_bw()
+```
+
+## 7.画图2：价格走势时序图
+
+```{r}
+ggplot(stock_long,aes(x=time,y=price,color=index_name))+
+  geom_line()+
+  labs(title="股指价格走势",
+       x="时间",
+       y="价格")+
+  theme_bw()
+```
+
+## 8.结论
+
+### SMI指数平均收益更高，同时波动率也偏高，属于高风险高收益
+
+### FTSE波动率偏低，走势更平稳，防御性更强
+
+### 收益和风险整体正相匹配，符合”高风险高收益“的常识
